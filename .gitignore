@@ -1,0 +1,26 @@
+# Build directories
+out/
+build/
+cmake-build-*/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.sln
+*.vcxproj
+*.vcxproj.*
+
+# vcpkg
+vcpkg_installed/
+
+# IDE
+.idea/
+.vscode/
+
+# CodeQL
+_codeql_detected_source_root
+
+# OS files
+.DS_Store
+Thumbs.db
