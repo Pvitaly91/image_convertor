@@ -22,10 +22,13 @@ git clone https://github.com/microsoft/vcpkg.git
 cd vcpkg
 .\bootstrap-vcpkg.bat
 
-# Set environment variable (add to system PATH permanently)
-$env:VCPKG_ROOT = "C:\vcpkg"
+# Set VCPKG_ROOT environment variable (REQUIRED for CMakePresets.json)
+setx VCPKG_ROOT "C:\vcpkg"
+# Or via PowerShell:
 [Environment]::SetEnvironmentVariable("VCPKG_ROOT", "C:\vcpkg", "User")
 ```
+
+**Important:** After setting `VCPKG_ROOT`, restart your terminal/PowerShell and Visual Studio.
 
 ### Step 2: Enable vcpkg Integration with Visual Studio
 
@@ -58,10 +61,14 @@ cd image_convertor
 ### Step 5: Configure the Build
 
 1. Wait for CMake configuration to complete (check Output window → Show output from: CMake)
-2. If configuration fails, ensure vcpkg integration is set up correctly
+2. VS2022 will automatically use `CMakePresets.json` to configure the vcpkg toolchain
 3. Select the build configuration:
-   - Click on the dropdown in the toolbar (default: `x64-Debug`)
-   - Choose `x64-Debug` or `x64-Release`
+   - Click on the dropdown in the toolbar
+   - Choose `x64-debug` or `x64-release`
+4. If configuration fails, verify `VCPKG_ROOT` is set correctly:
+   ```powershell
+   echo $env:VCPKG_ROOT
+   ```
 
 ### Step 6: Build the Project
 
@@ -76,6 +83,7 @@ Press **F5** (Debug) or **Ctrl+F5** (Run without debugging)
 ```
 image_convertor/
 ├── CMakeLists.txt      # CMake build configuration
+├── CMakePresets.json   # CMake presets for VS2022 + vcpkg
 ├── vcpkg.json          # vcpkg manifest (dependencies)
 ├── README.md           # This file
 └── src/
@@ -106,10 +114,16 @@ System libraries:
 
 ## Troubleshooting
 
-### CMake configuration fails
-- Ensure vcpkg is installed and integrated
-- Check that `VCPKG_ROOT` environment variable is set
-- Restart Visual Studio after setting environment variables
+### CMake configuration fails with "find_package" error
+1. Ensure `VCPKG_ROOT` environment variable is set to your vcpkg installation path
+2. Restart Visual Studio after setting the variable
+3. Delete the `out/` and `.vs/` folders, then reopen the project
+4. Add diagnostic lines to CMakeLists.txt (temporarily):
+   ```cmake
+   message(STATUS "TOOLCHAIN: ${CMAKE_TOOLCHAIN_FILE}")
+   message(STATUS "VCPKG_ROOT env: $ENV{VCPKG_ROOT}")
+   ```
+   If TOOLCHAIN is empty, VS is not using the vcpkg toolchain.
 
 ### Build fails with "cannot find library"
 - Run `vcpkg integrate install` in PowerShell
