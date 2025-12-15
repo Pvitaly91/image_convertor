@@ -1,1 +1,206 @@
-# image_convertor
+# Image Convertor
+
+Windows GUI application for converting AVIF images from URL to JPEG format.
+
+## Requirements
+
+- **Windows 10 or Windows 11**
+- **Visual Studio 2022** (with "Desktop development with C++" workload)
+- **vcpkg** (package manager)
+- **CMake 3.21+** (included with Visual Studio 2022)
+
+## Setup Instructions
+
+### Step 1: Install vcpkg
+
+If you don't have vcpkg installed:
+
+```powershell
+# Open PowerShell as Administrator and run:
+cd C:\
+git clone https://github.com/microsoft/vcpkg.git
+cd vcpkg
+.\bootstrap-vcpkg.bat
+
+# Set environment variable (add to system PATH permanently)
+$env:VCPKG_ROOT = "C:\vcpkg"
+[Environment]::SetEnvironmentVariable("VCPKG_ROOT", "C:\vcpkg", "User")
+```
+
+### Step 2: Enable vcpkg Integration with Visual Studio
+
+Option A - **System-wide integration** (recommended):
+```powershell
+cd C:\vcpkg
+.\vcpkg integrate install
+```
+
+Option B - **CMake toolchain file** (alternative):
+Set the `CMAKE_TOOLCHAIN_FILE` environment variable:
+```powershell
+[Environment]::SetEnvironmentVariable("CMAKE_TOOLCHAIN_FILE", "C:\vcpkg\scripts\buildsystems\vcpkg.cmake", "User")
+```
+
+### Step 3: Clone the Repository
+
+```powershell
+git clone https://github.com/Pvitaly91/image_convertor.git
+cd image_convertor
+```
+
+### Step 4: Open in Visual Studio 2022
+
+1. Open **Visual Studio 2022**
+2. Select **File → Open → Folder...**
+3. Navigate to the cloned `image_convertor` folder and click **Select Folder**
+4. Visual Studio will automatically detect the CMake project
+
+### Step 5: Configure the Build
+
+1. Wait for CMake configuration to complete (check Output window → Show output from: CMake)
+2. If configuration fails, ensure vcpkg integration is set up correctly
+3. Select the build configuration:
+   - Click on the dropdown in the toolbar (default: `x64-Debug`)
+   - Choose `x64-Debug` or `x64-Release`
+
+### Step 6: Build the Project
+
+Press **Ctrl+Shift+B** or select **Build → Build All**
+
+### Step 7: Run the Application
+
+Press **F5** (Debug) or **Ctrl+F5** (Run without debugging)
+
+## Project Structure
+
+```
+image_convertor/
+├── CMakeLists.txt      # CMake build configuration
+├── vcpkg.json          # vcpkg manifest (dependencies)
+├── README.md           # This file
+└── src/
+    └── main.cpp        # Application source code
+```
+
+## Features (Current Implementation)
+
+- Win32 GUI application with:
+  - URL input field (supports http:// and https://)
+  - Convert button
+  - Multi-line status display
+- Pictures folder as default output location
+- Worker thread for non-blocking UI
+- Status updates: "Downloading...", "Decoding...", "Saving...", "Done"
+- Creates a dummy output file in Pictures folder
+
+## Dependencies
+
+Managed via vcpkg manifest mode:
+- **libavif** - AVIF image format library
+- **libjpeg-turbo** - High-speed JPEG library
+
+System libraries:
+- **winhttp** - HTTP client API
+- **shell32** - Shell functions (folder paths)
+- **ole32** - COM support
+
+## Troubleshooting
+
+### CMake configuration fails
+- Ensure vcpkg is installed and integrated
+- Check that `VCPKG_ROOT` environment variable is set
+- Restart Visual Studio after setting environment variables
+
+### Build fails with "cannot find library"
+- Run `vcpkg integrate install` in PowerShell
+- Delete the `out` folder and reconfigure CMake
+
+### Application doesn't start
+- Check that all DLLs are present in the output directory
+- Run in Debug mode to see error messages
+
+## TODO: Implementing Real Conversion Logic
+
+The current implementation uses stub functions. To implement actual conversion:
+
+### 1. WinHTTP Download (in `WorkerThreadProc`, Step 1)
+
+```cpp
+// Location: src/main.cpp, WorkerThreadProc function, after "Downloading..." status
+
+// Parse URL
+URL_COMPONENTS urlComp = {};
+urlComp.dwStructSize = sizeof(urlComp);
+urlComp.dwSchemeLength = -1;
+urlComp.dwHostNameLength = -1;
+urlComp.dwUrlPathLength = -1;
+
+WinHttpCrackUrl(url.c_str(), 0, 0, &urlComp);
+
+// Create session
+HINTERNET hSession = WinHttpOpen(L"ImageConvertor/1.0", 
+    WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, 
+    WINHTTP_NO_PROXY_NAME, 
+    WINHTTP_NO_PROXY_BYPASS, 0);
+
+// Connect and download...
+// Store downloaded data in std::vector<uint8_t> avifData;
+```
+
+### 2. libavif Decoding (Step 2)
+
+```cpp
+// Location: src/main.cpp, WorkerThreadProc function, after "Decoding..." status
+
+#include <avif/avif.h>
+
+avifDecoder* decoder = avifDecoderCreate();
+avifResult result = avifDecoderSetIOMemory(decoder, avifData.data(), avifData.size());
+result = avifDecoderParse(decoder);
+result = avifDecoderNextImage(decoder);
+
+avifRGBImage rgb = {};
+avifRGBImageSetDefaults(&rgb, decoder->image);
+avifRGBImageAllocatePixels(&rgb);
+avifImageYUVToRGB(decoder->image, &rgb);
+
+// rgb.pixels contains RGB data
+// rgb.width, rgb.height - dimensions
+// rgb.rowBytes - bytes per row
+```
+
+### 3. libjpeg-turbo Encoding (Step 3)
+
+```cpp
+// Location: src/main.cpp, WorkerThreadProc function, after "Saving..." status
+
+#include <turbojpeg.h>
+
+tjhandle tjInstance = tjInitCompress();
+unsigned char* jpegBuf = nullptr;
+unsigned long jpegSize = 0;
+
+tjCompress2(tjInstance, rgb.pixels, rgb.width, rgb.rowBytes, rgb.height,
+    TJPF_RGB, &jpegBuf, &jpegSize, TJSAMP_444, 90, TJFLAG_FASTDCT);
+
+// Write jpegBuf to file
+// ...
+
+tjFree(jpegBuf);
+tjDestroy(tjInstance);
+avifRGBImageFreePixels(&rgb);
+avifDecoderDestroy(decoder);
+```
+
+### 4. Add Include Headers
+
+Add at the top of main.cpp:
+```cpp
+#include <avif/avif.h>
+#include <turbojpeg.h>
+#include <vector>
+```
+
+## License
+
+MIT License

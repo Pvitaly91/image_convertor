@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "image-convertor",
+  "version-string": "1.0.0",
+  "description": "Windows GUI application for converting AVIF images to JPEG",
+  "dependencies": [
+    "libavif",
+    "libjpeg-turbo"
+  ]
+}
