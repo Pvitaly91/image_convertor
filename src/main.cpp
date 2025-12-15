@@ -27,7 +27,10 @@ void SetStatusText(const std::wstring& text)
 {
     if (g_hStatus)
     {
-        SetWindowTextW(g_hStatus, text.c_str());
+        if (!SetWindowTextW(g_hStatus, text.c_str()))
+        {
+            OutputDebugStringW(L"Failed to update status control text.\r\n");
+        }
     }
 }
 
@@ -111,12 +114,21 @@ void RunWorker(HWND hwnd, std::wstring url)
 
     std::filesystem::path outputPath = std::filesystem::path(pictures) / L"test.jpg";
     std::ofstream out(outputPath, std::ios::binary);
-    if (out)
+    if (!out)
     {
-        static const unsigned char dummy[] = {0xFF, 0xD8, 0xFF, 0xD9};
-        out.write(reinterpret_cast<const char*>(dummy), sizeof(dummy));
+        status(L"Failed to open output file:\r\n" + outputPath.wstring());
+        notifyFinish();
+        return;
     }
-    out.close();
+
+    static const unsigned char dummy[] = {0xFF, 0xD8, 0xFF, 0xD9};
+    out.write(reinterpret_cast<const char*>(dummy), sizeof(dummy));
+    if (!out.good())
+    {
+        status(L"Failed to write to output file:\r\n" + outputPath.wstring());
+        notifyFinish();
+        return;
+    }
 
     status(L"Done. Saved to:\r\n" + outputPath.wstring());
     notifyFinish();
@@ -194,7 +206,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         if (LOWORD(wParam) == 2 && HIWORD(wParam) == BN_CLICKED)
         {
             wchar_t buffer[kUrlBufferSize] = {};
-            GetWindowTextW(g_hEditUrl, buffer, static_cast<int>(std::size(buffer)));
+            GetWindowTextW(g_hEditUrl, buffer, kUrlBufferSize - 1);
+            buffer[kUrlBufferSize - 1] = L'\0';
             std::wstring url(buffer);
             if (!IsValidUrl(url))
             {
