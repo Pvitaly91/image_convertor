@@ -29,7 +29,10 @@ void SetStatusText(const std::wstring& text)
 void PostStatusText(HWND hwnd, const std::wstring& text)
 {
     auto* payload = new std::wstring(text);
-    PostMessageW(hwnd, WM_APP_STATUS_TEXT, 0, reinterpret_cast<LPARAM>(payload));
+    if (!PostMessageW(hwnd, WM_APP_STATUS_TEXT, 0, reinterpret_cast<LPARAM>(payload)))
+    {
+        delete payload;
+    }
 }
 
 std::wstring GetPicturesFolder()
