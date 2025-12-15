@@ -28,6 +28,7 @@
 2. Запустити Visual Studio 2022.
 3. Обрати **File → Open → Folder** і вказати корінь репозиторію.
 4. Дочекатися, поки VS зчитає CMakeLists.txt та підтягне залежності через vcpkg.
+   > Назва репозиторію лишилась `image_convertor` (legacy), але CMake-проєкт і таргет називаються `image_converter`.
 
 ## Збірка
 1. У верхній панелі VS обрати **x64-Debug** або **x64-Release**.

@@ -1,9 +1,11 @@
 #include <windows.h>
 #include <shlobj.h>
 
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <thread>
 
@@ -19,6 +21,7 @@ HWND g_hButtonConvert = nullptr;
 HWND g_hStatus = nullptr;
 bool g_isWorking = false;
 std::thread g_worker;
+std::atomic_bool g_shutdown{false};
 
 void SetStatusText(const std::wstring& text)
 {
@@ -28,9 +31,14 @@ void SetStatusText(const std::wstring& text)
     }
 }
 
-void PostStatusText(HWND hwnd, std::wstring text)
+void PostStatusText(HWND hwnd, const std::wstring& text)
 {
-    SendMessageW(hwnd, WM_APP_STATUS_TEXT, 0, reinterpret_cast<LPARAM>(&text));
+    auto payload = std::make_unique<std::wstring>(text);
+    auto* raw = payload.release();
+    if (!PostMessageW(hwnd, WM_APP_STATUS_TEXT, 0, reinterpret_cast<LPARAM>(raw)))
+    {
+        delete raw;
+    }
 }
 
 std::wstring GetPicturesFolder()
@@ -68,13 +76,31 @@ bool IsValidUrl(const std::wstring& url)
 
 void RunWorker(HWND hwnd, std::wstring url)
 {
+    auto notifyFinish = [hwnd]() { PostMessageW(hwnd, WM_APP_WORK_FINISHED, 0, 0); };
+
+    if (g_shutdown.load())
+    {
+        notifyFinish();
+        return;
+    }
+
     auto status = [&](const std::wstring& message) { PostStatusText(hwnd, message); };
 
     status(L"Downloading...");
     std::this_thread::sleep_for(std::chrono::milliseconds(400));
+    if (g_shutdown.load())
+    {
+        notifyFinish();
+        return;
+    }
 
     status(L"Decoding...");
     std::this_thread::sleep_for(std::chrono::milliseconds(400));
+    if (g_shutdown.load())
+    {
+        notifyFinish();
+        return;
+    }
 
     status(L"Saving...");
     auto pictures = GetPicturesFolder();
@@ -93,12 +119,12 @@ void RunWorker(HWND hwnd, std::wstring url)
     out.close();
 
     status(L"Done. Saved to:\r\n" + outputPath.wstring());
-    PostMessageW(hwnd, WM_APP_WORK_FINISHED, 0, 0);
+    notifyFinish();
 }
 
 void StartWorker(HWND hwnd, const std::wstring& url)
 {
-    if (g_isWorking)
+    if (g_isWorking || g_shutdown.load())
     {
         return;
     }
@@ -182,7 +208,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     case WM_APP_STATUS_TEXT:
     {
-        const std::wstring* text = reinterpret_cast<const std::wstring*>(lParam);
+        std::unique_ptr<std::wstring> text(reinterpret_cast<std::wstring*>(lParam));
         if (text)
         {
             SetStatusText(*text);
@@ -198,16 +224,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         EnableWindow(g_hButtonConvert, TRUE);
         break;
     case WM_DESTROY:
+        g_shutdown.store(true);
         if (g_worker.joinable())
         {
-            if (g_isWorking)
-            {
-                g_worker.detach();
-            }
-            else
-            {
-                g_worker.join();
-            }
+            g_worker.join();
         }
         PostQuitMessage(0);
         break;
