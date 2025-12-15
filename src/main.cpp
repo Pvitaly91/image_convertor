@@ -15,6 +15,9 @@ constexpr wchar_t kWindowClassName[] = L"ImageConverterMainWindow";
 constexpr UINT WM_APP_STATUS_TEXT = WM_APP + 1;
 constexpr UINT WM_APP_WORK_FINISHED = WM_APP + 2;
 constexpr int kUrlBufferSize = 2048;
+constexpr int kIdUrlEdit = 1;
+constexpr int kIdConvertButton = 2;
+constexpr int kIdStatusControl = 3;
 
 HWND g_hEditUrl = nullptr;
 HWND g_hButtonConvert = nullptr;
@@ -174,17 +177,17 @@ void CreateControls(HWND hwnd)
 
     g_hEditUrl = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
                                  WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
-                                 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(1), GetModuleHandleW(nullptr), nullptr);
+                                 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(kIdUrlEdit), GetModuleHandleW(nullptr), nullptr);
     SendMessageW(g_hEditUrl, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
 
     g_hButtonConvert = CreateWindowExW(0, L"BUTTON", L"Convert",
                                        WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                                       0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(2), GetModuleHandleW(nullptr), nullptr);
+                                       0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(kIdConvertButton), GetModuleHandleW(nullptr), nullptr);
     SendMessageW(g_hButtonConvert, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
 
     g_hStatus = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
                                 WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | WS_VSCROLL | ES_AUTOVSCROLL,
-                                0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(3), GetModuleHandleW(nullptr), nullptr);
+                                0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(kIdStatusControl), GetModuleHandleW(nullptr), nullptr);
     SendMessageW(g_hStatus, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
 }
 
@@ -203,7 +206,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     }
     case WM_COMMAND:
-        if (LOWORD(wParam) == 2 && HIWORD(wParam) == BN_CLICKED)
+        if (LOWORD(wParam) == kIdConvertButton && HIWORD(wParam) == BN_CLICKED)
         {
             wchar_t buffer[kUrlBufferSize] = {};
             GetWindowTextW(g_hEditUrl, buffer, kUrlBufferSize - 1);
@@ -240,7 +243,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         g_shutdown.store(true);
         if (g_worker.joinable())
         {
-            g_worker.join();
+            HANDLE handle = reinterpret_cast<HANDLE>(g_worker.native_handle());
+            DWORD waitResult = WaitForSingleObject(handle, 1000);
+            if (waitResult == WAIT_TIMEOUT)
+            {
+                g_worker.detach();
+            }
+            else
+            {
+                g_worker.join();
+            }
         }
         PostQuitMessage(0);
         break;
