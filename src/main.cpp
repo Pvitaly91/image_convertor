@@ -4,13 +4,12 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <memory>
 #include <string>
 #include <thread>
 
 namespace
 {
-constexpr wchar_t kWindowClassName[] = L"ImageConvertorMainWindow";
+constexpr wchar_t kWindowClassName[] = L"ImageConverterMainWindow";
 constexpr UINT WM_APP_STATUS_TEXT = WM_APP + 1;
 constexpr UINT WM_APP_WORK_FINISHED = WM_APP + 2;
 constexpr int kUrlBufferSize = 2048;
@@ -29,14 +28,9 @@ void SetStatusText(const std::wstring& text)
     }
 }
 
-void PostStatusText(HWND hwnd, const std::wstring& text)
+void PostStatusText(HWND hwnd, std::wstring text)
 {
-    auto payload = std::make_unique<std::wstring>(text);
-    auto* raw = payload.release();
-    if (!PostMessageW(hwnd, WM_APP_STATUS_TEXT, 0, reinterpret_cast<LPARAM>(raw)))
-    {
-        delete raw;
-    }
+    SendMessageW(hwnd, WM_APP_STATUS_TEXT, 0, reinterpret_cast<LPARAM>(&text));
 }
 
 std::wstring GetPicturesFolder()
@@ -188,11 +182,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     case WM_APP_STATUS_TEXT:
     {
-        std::wstring* text = reinterpret_cast<std::wstring*>(lParam);
+        const std::wstring* text = reinterpret_cast<const std::wstring*>(lParam);
         if (text)
         {
             SetStatusText(*text);
-            delete text;
         }
         break;
     }
@@ -207,7 +200,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_DESTROY:
         if (g_worker.joinable())
         {
-            g_worker.join();
+            if (g_isWorking)
+            {
+                g_worker.detach();
+            }
+            else
+            {
+                g_worker.join();
+            }
         }
         PostQuitMessage(0);
         break;
