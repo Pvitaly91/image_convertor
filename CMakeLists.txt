@@ -21,9 +21,9 @@ if(WIN32)
 endif()
 
 # Find packages installed via vcpkg
-# Note: vcpkg port names differ from CMake package names
-# libavif port -> avif CMake package
-find_package(avif CONFIG REQUIRED)
+# Note: vcpkg port name is libavif, CMake package name is also libavif
+# But the CMake target to link is "avif"
+find_package(libavif CONFIG REQUIRED)
 find_package(libjpeg-turbo CONFIG REQUIRED)
 
 # Create executable

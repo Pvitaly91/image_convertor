@@ -114,16 +114,44 @@ System libraries:
 
 ## Troubleshooting
 
-### CMake configuration fails with "find_package" error
-1. Ensure `VCPKG_ROOT` environment variable is set to your vcpkg installation path
-2. Restart Visual Studio after setting the variable
-3. Delete the `out/` and `.vs/` folders, then reopen the project
-4. Add diagnostic lines to CMakeLists.txt (temporarily):
-   ```cmake
-   message(STATUS "TOOLCHAIN: ${CMAKE_TOOLCHAIN_FILE}")
-   message(STATUS "VCPKG_ROOT env: $ENV{VCPKG_ROOT}")
-   ```
-   If TOOLCHAIN is empty, VS is not using the vcpkg toolchain.
+### CMake configuration fails with "Could not find a package configuration file provided by libavif/avif"
+
+This error means vcpkg hasn't installed the dependencies yet, or the toolchain isn't being used.
+
+**Step 1: Verify VCPKG_ROOT is set correctly**
+```powershell
+# Check in PowerShell:
+echo $env:VCPKG_ROOT
+# Should output your vcpkg path, e.g., G:\DEV\vcpkg
+
+# If empty, set it permanently:
+setx VCPKG_ROOT "G:\DEV\vcpkg"
+# Then close and reopen PowerShell/VS2022
+```
+
+**Step 2: Manually install dependencies (if manifest mode doesn't trigger)**
+```powershell
+cd $env:VCPKG_ROOT
+.\vcpkg install libavif:x64-windows libjpeg-turbo:x64-windows
+```
+
+**Step 3: Clean CMake cache and reconfigure**
+1. Close Visual Studio
+2. Delete these folders in your project directory:
+   - `out/`
+   - `.vs/`
+3. Reopen VS2022: File → Open → Folder
+4. Select a preset: x64-debug or x64-release
+
+**Step 4: Add diagnostic output (optional)**
+Temporarily add these lines at the top of CMakeLists.txt (after `cmake_minimum_required`):
+```cmake
+message(STATUS "=== VCPKG DIAGNOSTICS ===")
+message(STATUS "CMAKE_TOOLCHAIN_FILE: ${CMAKE_TOOLCHAIN_FILE}")
+message(STATUS "VCPKG_ROOT env: $ENV{VCPKG_ROOT}")
+message(STATUS "=========================")
+```
+If CMAKE_TOOLCHAIN_FILE is empty, VS2022 is not using the vcpkg toolchain.
 
 ### Build fails with "cannot find library"
 - Run `vcpkg integrate install` in PowerShell
