@@ -36,6 +36,7 @@
   cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
   ```
   або задайте `VCPKG_ROOT` у середовищі — тоді CMakeLists.txt підхопить toolchain автоматично.
+  Якщо vcpkg стоїть у типовоvому шляху `C:\vcpkg`, CMakeLists.txt також спробує підхопити його автоматично.
 
 ## Збірка
 1. У верхній панелі VS обрати **x64-Debug** або **x64-Release**.
