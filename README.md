@@ -30,6 +30,13 @@
 4. Дочекатися, поки VS зчитає CMakeLists.txt та підтягне залежності через vcpkg.
    > Назва репозиторію лишилась `image_convertor` (legacy), але CMake-проєкт і таргет називаються `image_converter`.
 
+### Якщо конфігуруєте cmake вручну (не через VS)
+- Переконайтесь, що задано шлях до toolchain vcpkg:
+  ```powershell
+  cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
+  ```
+  або задайте `VCPKG_ROOT` у середовищі — тоді CMakeLists.txt підхопить toolchain автоматично.
+
 ## Збірка
 1. У верхній панелі VS обрати **x64-Debug** або **x64-Release**.
 2. Натиснути **Build → Build All** (або CMake → Build All).
