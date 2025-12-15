@@ -4,6 +4,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <thread>
 
@@ -12,11 +13,13 @@ namespace
 constexpr wchar_t kWindowClassName[] = L"ImageConvertorMainWindow";
 constexpr UINT WM_APP_STATUS_TEXT = WM_APP + 1;
 constexpr UINT WM_APP_WORK_FINISHED = WM_APP + 2;
+constexpr int kUrlBufferSize = 2048;
 
 HWND g_hEditUrl = nullptr;
 HWND g_hButtonConvert = nullptr;
 HWND g_hStatus = nullptr;
 bool g_isWorking = false;
+std::thread g_worker;
 
 void SetStatusText(const std::wstring& text)
 {
@@ -28,10 +31,11 @@ void SetStatusText(const std::wstring& text)
 
 void PostStatusText(HWND hwnd, const std::wstring& text)
 {
-    auto* payload = new std::wstring(text);
-    if (!PostMessageW(hwnd, WM_APP_STATUS_TEXT, 0, reinterpret_cast<LPARAM>(payload)))
+    auto payload = std::make_unique<std::wstring>(text);
+    auto* raw = payload.release();
+    if (!PostMessageW(hwnd, WM_APP_STATUS_TEXT, 0, reinterpret_cast<LPARAM>(raw)))
     {
-        delete payload;
+        delete raw;
     }
 }
 
@@ -105,10 +109,13 @@ void StartWorker(HWND hwnd, const std::wstring& url)
         return;
     }
     g_isWorking = true;
+    if (g_worker.joinable())
+    {
+        g_worker.join();
+    }
     EnableWindow(g_hButtonConvert, FALSE);
 
-    std::thread worker([hwnd, url]() { RunWorker(hwnd, url); });
-    worker.detach();
+    g_worker = std::thread([hwnd, url]() { RunWorker(hwnd, url); });
 }
 
 void LayoutControls(HWND hwnd, int width, int height)
@@ -166,7 +173,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_COMMAND:
         if (LOWORD(wParam) == 2 && HIWORD(wParam) == BN_CLICKED)
         {
-            wchar_t buffer[2048] = {};
+            wchar_t buffer[kUrlBufferSize] = {};
             GetWindowTextW(g_hEditUrl, buffer, static_cast<int>(std::size(buffer)));
             std::wstring url(buffer);
             if (!IsValidUrl(url))
@@ -191,9 +198,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
     }
     case WM_APP_WORK_FINISHED:
         g_isWorking = false;
+        if (g_worker.joinable())
+        {
+            g_worker.join();
+        }
         EnableWindow(g_hButtonConvert, TRUE);
         break;
     case WM_DESTROY:
+        if (g_worker.joinable())
+        {
+            g_worker.join();
+        }
         PostQuitMessage(0);
         break;
     default:
@@ -219,7 +234,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
         return 0;
     }
 
-    HWND hwnd = CreateWindowExW(0, kWindowClassName, L"Image Convertor (stub)",
+    HWND hwnd = CreateWindowExW(0, kWindowClassName, L"Image Converter (stub)",
                                 WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 720, 360,
                                 nullptr, nullptr, hInstance, nullptr);
     if (!hwnd)

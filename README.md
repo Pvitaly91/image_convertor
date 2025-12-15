@@ -1,4 +1,4 @@
-# image_convertor
+# image_converter
 
 Швидкий стартовий Win32 GUI-проєкт під Visual Studio 2022 (CMake + vcpkg manifest mode).
 

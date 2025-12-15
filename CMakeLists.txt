@@ -1,16 +1,16 @@
 cmake_minimum_required(VERSION 3.23)
 
-project(image_convertor LANGUAGES CXX VERSION 0.1.0)
+project(image_converter LANGUAGES CXX VERSION 0.1.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_executable(image_convertor WIN32
+add_executable(image_converter WIN32
     src/main.cpp
 )
 
-target_compile_definitions(image_convertor PRIVATE
+target_compile_definitions(image_converter PRIVATE
     UNICODE
     _UNICODE
     WIN32_LEAN_AND_MEAN
@@ -18,13 +18,13 @@ target_compile_definitions(image_convertor PRIVATE
 )
 
 if(MSVC)
-    target_compile_options(image_convertor PRIVATE /W4 /permissive-)
+    target_compile_options(image_converter PRIVATE /W4 /permissive-)
 endif()
 
 find_package(libavif CONFIG REQUIRED)
 find_package(libjpeg-turbo CONFIG REQUIRED)
 
-target_link_libraries(image_convertor PRIVATE
+target_link_libraries(image_converter PRIVATE
     avif
     turbojpeg
     winhttp
@@ -32,6 +32,6 @@ target_link_libraries(image_convertor PRIVATE
     ole32
 )
 
-target_include_directories(image_convertor PRIVATE
+target_include_directories(image_converter PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
