@@ -24,9 +24,17 @@ endif()
 find_package(libavif CONFIG REQUIRED)
 find_package(libjpeg-turbo CONFIG REQUIRED)
 
+if(TARGET avif AND NOT TARGET libavif::avif)
+    add_library(libavif::avif ALIAS avif)
+endif()
+
+if(TARGET turbojpeg AND NOT TARGET libjpeg-turbo::turbojpeg)
+    add_library(libjpeg-turbo::turbojpeg ALIAS turbojpeg)
+endif()
+
 target_link_libraries(image_converter PRIVATE
-    avif
-    turbojpeg
+    libavif::avif
+    libjpeg-turbo::turbojpeg
     winhttp
     shell32
     ole32

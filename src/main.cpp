@@ -209,8 +209,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         if (LOWORD(wParam) == kIdConvertButton && HIWORD(wParam) == BN_CLICKED)
         {
             wchar_t buffer[kUrlBufferSize] = {};
-            GetWindowTextW(g_hEditUrl, buffer, kUrlBufferSize - 1);
-            buffer[kUrlBufferSize - 1] = L'\0';
+            GetWindowTextW(g_hEditUrl, buffer, kUrlBufferSize);
             std::wstring url(buffer);
             if (!IsValidUrl(url))
             {
@@ -243,16 +242,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         g_shutdown.store(true);
         if (g_worker.joinable())
         {
-            HANDLE handle = reinterpret_cast<HANDLE>(g_worker.native_handle());
-            DWORD waitResult = WaitForSingleObject(handle, 1000);
-            if (waitResult == WAIT_TIMEOUT)
-            {
-                g_worker.detach();
-            }
-            else
-            {
-                g_worker.join();
-            }
+            g_worker.join();
         }
         PostQuitMessage(0);
         break;
