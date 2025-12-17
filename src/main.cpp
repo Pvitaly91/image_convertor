@@ -1,0 +1,291 @@
+#include <windows.h>
+#include <shlobj.h>
+
+#include <atomic>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <memory>
+#include <string>
+#include <thread>
+
+namespace
+{
+constexpr wchar_t kWindowClassName[] = L"ImageConverterMainWindow";
+constexpr UINT WM_APP_STATUS_TEXT = WM_APP + 1;
+constexpr UINT WM_APP_WORK_FINISHED = WM_APP + 2;
+constexpr int kUrlBufferSize = 2048;
+constexpr int kIdUrlEdit = 1;
+constexpr int kIdConvertButton = 2;
+constexpr int kIdStatusControl = 3;
+
+HWND g_hEditUrl = nullptr;
+HWND g_hButtonConvert = nullptr;
+HWND g_hStatus = nullptr;
+bool g_isWorking = false;
+std::thread g_worker;
+std::atomic_bool g_shutdown{false};
+
+void SetStatusText(const std::wstring& text)
+{
+    if (g_hStatus)
+    {
+        if (!SetWindowTextW(g_hStatus, text.c_str()))
+        {
+            OutputDebugStringW(L"Failed to update status control text.\r\n");
+        }
+    }
+}
+
+void PostStatusText(HWND hwnd, const std::wstring& text)
+{
+    auto payload = std::make_unique<std::wstring>(text);
+    auto* raw = payload.release();
+    if (!PostMessageW(hwnd, WM_APP_STATUS_TEXT, 0, reinterpret_cast<LPARAM>(raw)))
+    {
+        delete raw;
+    }
+}
+
+std::wstring GetPicturesFolder()
+{
+    PWSTR path = nullptr;
+    std::wstring result;
+    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Pictures, KF_FLAG_DEFAULT, nullptr, &path)) && path)
+    {
+        result.assign(path);
+        CoTaskMemFree(path);
+    }
+    return result;
+}
+
+bool IsValidUrl(const std::wstring& url)
+{
+    if (url.size() < 8)
+    {
+        return false;
+    }
+
+    const std::wstring prefixHttp = L"http://";
+    const std::wstring prefixHttps = L"https://";
+
+    if (_wcsnicmp(url.c_str(), prefixHttp.c_str(), prefixHttp.size()) == 0)
+    {
+        return true;
+    }
+    if (_wcsnicmp(url.c_str(), prefixHttps.c_str(), prefixHttps.size()) == 0)
+    {
+        return true;
+    }
+    return false;
+}
+
+void RunWorker(HWND hwnd, std::wstring url)
+{
+    auto notifyFinish = [hwnd]() { PostMessageW(hwnd, WM_APP_WORK_FINISHED, 0, 0); };
+
+    if (g_shutdown.load())
+    {
+        notifyFinish();
+        return;
+    }
+
+    auto status = [&](const std::wstring& message) { PostStatusText(hwnd, message); };
+
+    status(L"Downloading...");
+    std::this_thread::sleep_for(std::chrono::milliseconds(400));
+    if (g_shutdown.load())
+    {
+        notifyFinish();
+        return;
+    }
+
+    status(L"Decoding...");
+    std::this_thread::sleep_for(std::chrono::milliseconds(400));
+    if (g_shutdown.load())
+    {
+        notifyFinish();
+        return;
+    }
+
+    status(L"Saving...");
+    auto pictures = GetPicturesFolder();
+    if (pictures.empty())
+    {
+        pictures = L".";
+    }
+
+    std::filesystem::path outputPath = std::filesystem::path(pictures) / L"test.jpg";
+    std::ofstream out(outputPath, std::ios::binary);
+    if (!out)
+    {
+        status(L"Failed to open output file:\r\n" + outputPath.wstring());
+        notifyFinish();
+        return;
+    }
+
+    static const unsigned char dummy[] = {0xFF, 0xD8, 0xFF, 0xD9};
+    out.write(reinterpret_cast<const char*>(dummy), sizeof(dummy));
+    if (!out.good())
+    {
+        status(L"Failed to write to output file:\r\n" + outputPath.wstring());
+        notifyFinish();
+        return;
+    }
+
+    status(L"Done. Saved to:\r\n" + outputPath.wstring());
+    notifyFinish();
+}
+
+void StartWorker(HWND hwnd, const std::wstring& url)
+{
+    if (g_isWorking || g_shutdown.load())
+    {
+        return;
+    }
+    g_isWorking = true;
+    if (g_worker.joinable())
+    {
+        g_worker.join();
+    }
+    EnableWindow(g_hButtonConvert, FALSE);
+
+    g_worker = std::thread([hwnd, url]() { RunWorker(hwnd, url); });
+}
+
+void LayoutControls(HWND hwnd, int width, int height)
+{
+    constexpr int margin = 12;
+    constexpr int controlHeight = 24;
+    constexpr int buttonWidth = 120;
+
+    int x = margin;
+    int y = margin;
+    int editWidth = width - (3 * margin) - buttonWidth;
+
+    MoveWindow(g_hEditUrl, x, y, editWidth, controlHeight, TRUE);
+    MoveWindow(g_hButtonConvert, x + editWidth + margin, y, buttonWidth, controlHeight, TRUE);
+
+    y += controlHeight + margin;
+    int statusHeight = height - y - margin;
+    MoveWindow(g_hStatus, x, y, width - 2 * margin, statusHeight, TRUE);
+}
+
+void CreateControls(HWND hwnd)
+{
+    HFONT hFont = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+
+    g_hEditUrl = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
+                                 WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+                                 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(kIdUrlEdit), GetModuleHandleW(nullptr), nullptr);
+    SendMessageW(g_hEditUrl, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
+
+    g_hButtonConvert = CreateWindowExW(0, L"BUTTON", L"Convert",
+                                       WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+                                       0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(kIdConvertButton), GetModuleHandleW(nullptr), nullptr);
+    SendMessageW(g_hButtonConvert, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
+
+    g_hStatus = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", nullptr,
+                                WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_READONLY | WS_VSCROLL | ES_AUTOVSCROLL,
+                                0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(kIdStatusControl), GetModuleHandleW(nullptr), nullptr);
+    SendMessageW(g_hStatus, WM_SETFONT, reinterpret_cast<WPARAM>(hFont), TRUE);
+}
+
+LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    switch (message)
+    {
+    case WM_CREATE:
+        CreateControls(hwnd);
+        break;
+    case WM_SIZE:
+    {
+        int width = LOWORD(lParam);
+        int height = HIWORD(lParam);
+        LayoutControls(hwnd, width, height);
+        break;
+    }
+    case WM_COMMAND:
+        if (LOWORD(wParam) == kIdConvertButton && HIWORD(wParam) == BN_CLICKED)
+        {
+            wchar_t buffer[kUrlBufferSize] = {};
+            GetWindowTextW(g_hEditUrl, buffer, kUrlBufferSize);
+            std::wstring url(buffer);
+            if (!IsValidUrl(url))
+            {
+                SetStatusText(L"Please enter a valid http/https URL.");
+                return 0;
+            }
+            SetStatusText(L"Starting conversion...");
+            StartWorker(hwnd, url);
+            return 0;
+        }
+        break;
+    case WM_APP_STATUS_TEXT:
+    {
+        std::unique_ptr<std::wstring> text(reinterpret_cast<std::wstring*>(lParam));
+        if (text)
+        {
+            SetStatusText(*text);
+        }
+        break;
+    }
+    case WM_APP_WORK_FINISHED:
+        g_isWorking = false;
+        if (g_worker.joinable())
+        {
+            g_worker.join();
+        }
+        EnableWindow(g_hButtonConvert, TRUE);
+        break;
+    case WM_DESTROY:
+        g_shutdown.store(true);
+        if (g_worker.joinable())
+        {
+            g_worker.join();
+        }
+        PostQuitMessage(0);
+        break;
+    default:
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+    return 0;
+}
+} // namespace
+
+int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
+{
+    WNDCLASSEXW wcex = {};
+    wcex.cbSize = sizeof(WNDCLASSEXW);
+    wcex.style = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc = WndProc;
+    wcex.hInstance = hInstance;
+    wcex.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+    wcex.lpszClassName = kWindowClassName;
+
+    if (!RegisterClassExW(&wcex))
+    {
+        return 0;
+    }
+
+    HWND hwnd = CreateWindowExW(0, kWindowClassName, L"Image Converter (stub)",
+                                WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 720, 360,
+                                nullptr, nullptr, hInstance, nullptr);
+    if (!hwnd)
+    {
+        return 0;
+    }
+
+    ShowWindow(hwnd, nCmdShow);
+    UpdateWindow(hwnd);
+
+    MSG msg;
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0)
+    {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+
+    return static_cast<int>(msg.wParam);
+}

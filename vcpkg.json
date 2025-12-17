@@ -1,0 +1,9 @@
+{
+  "name": "image-converter",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "libavif",
+    "libjpeg-turbo"
+  ],
+  "builtin-baseline": "afcae59a1d67f1d2214b2a70a78ced65ccb1e8c5"
+}
